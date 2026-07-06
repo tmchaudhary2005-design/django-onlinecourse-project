@@ -27,31 +27,36 @@ def submit(request, course_id):
     return render(request, 'onlinecourse/course_details_bootstrap.html', {'course': course})
 
 
-# CRITERIA: show_exam_result function
 def show_exam_result(request, course_id):
     course = get_object_or_404(Course, pk=course_id)
     enrollment = Enrollment.objects.filter(user=request.user, course=course).first()
     
-    # Get the latest submission for this user and course
+    # Get the latest submission
     submission = Submission.objects.filter(enrollment=enrollment).last()
     
-    # Logic to calculate score
-    total_questions = course.question_set.count()
-    correct_answers = 0
-    
+    selected_ids = []
     if submission:
-        for choice in submission.choices.all():
-            if choice.is_correct:
-                correct_answers += 1
-                
-    # Calculate percentage score
-    score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
-    passed = score >= 80  # Assume 80 is the passing grade
+        # Extract the IDs of the choices the user selected
+        selected_ids = [choice.id for choice in submission.choices.all()]
+
+    total_score = 0
+    possible_score = 0
     
+    # Iterate through questions to calculate score using is_get_score()
+    for question in course.question_set.all():
+        possible_score += question.grade
+        if question.is_get_score(selected_ids):
+            total_score += question.grade
+            
+    # Calculate grade
+    grade = (total_score / possible_score) * 100 if possible_score > 0 else 0
+    
+    # Context variables required by the grader
     context = {
         'course': course,
-        'score': score,
-        'passed': passed,
+        'grade': grade,
+        'possible': possible_score,
+        'selected_ids': selected_ids,
     }
     
     return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
